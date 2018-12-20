@@ -1,0 +1,242 @@
+#!/usr/bin/python
+
+import os
+import re
+import sys
+import time
+import mmap
+import random
+import string
+import argparse
+import threading
+
+from time import sleep
+
+# echo 3 > /proc/sys/vm/drop_caches
+
+##############################################################################################################################################
+
+def formatRate( rate ):
+   srate = "%.2f B/s" % (rate)
+   if rate>=1024:
+      srate = "%.2f KB/s" % (float(rate) / float(1024))
+   if rate>=1024*1024:
+      srate = "%.2f MB/s" % (float(rate) / float(1024*1024))
+   if rate>=1024*1024*1024:
+      srate = "%.2f GB/s" % (float(rate) / float(1024*1024*1024))
+   if rate>=1024*1024*1024*1024:
+      srate = "%.2f TB/s" % (float(rate) / float(1024*1024*1024*1024))
+   return srate
+
+def formatSize( size ):
+   ssize = "%d Bytes" % (size)
+   if size>=1024:
+      ssize = "%d KBytes" % (float(size) / float(1024))
+   if size>=1024*1024:
+      ssize = "%d MBytes" % (float(size) / float(1024*1024))
+   if size>=1024*1024*1024:
+      ssize = "%d GBytes" % (float(size) / float(1024*1024*1024))
+   if size>=1024*1024*1024*1024:
+      ssize = "%d TBytes" % (float(size) / float(1024*1024*1024*1024))
+   return ssize
+
+###############################################################################################################################################
+
+class Writer:
+   def __init__(self, offset_array, buffer, filename, filehandle ):
+      self.offsets  = offset_array
+      self.buffer   = buffer
+      #self.flush    = flush
+      self.filename = filename
+      self.fh       = filehandle
+      self.delay    = float(0)
+      
+   def doWrite( self, block_delay=-1.0 ):
+      print "  Start writing into file %s" % (self.filename)
+      before = 1000000*time.time()
+      for offset in self.offsets:
+         os.lseek(self.fh, offset, os.SEEK_SET)
+         os.write(self.fh, self.buffer)
+         if block_delay >- 1:
+            time.sleep( block_delay )
+
+      after = 1000000*time.time()
+      print "  Stopped writing into %s" % (self.filename)
+      self.delay = float(after)-float(before)
+
+###############################################################################################################################################
+
+class Reader:
+   def __init__(self, offset_array, bsize, destbuf, filename, filehandle):
+      self.offsets  = offset_array
+      self.buffer   = destbuf
+      self.filename = filename
+      self.fh       = filehandle
+      self.delay    = float(0)
+      self.bsize    = bsize
+      
+   def doRead(self):
+      print "  Start reading from file %s" % (self.filename)
+      before = 1000000*time.time()
+      for offset in self.offsets:
+         os.lseek(self.fh, offset, os.SEEK_SET)
+         os.read(self.fh, self.buffer)
+      after = 1000000*time.time()
+      print "  Stopped reading from %s" % (self.filename)
+      self.delay = float(after)-float(before)
+
+###############################################################################################################################################
+         
+if __name__ == "__main__":
+
+   bsize = 256 * 1024
+   fsize = 1024 * 1024 * 1024
+   
+   parser = argparse.ArgumentParser(description="I/O benchmark for disk writes")
+   parser.add_argument('-F', '--filename',   type=str,            required=False, default='testfile', help='Specify filename for test')
+   parser.add_argument('-B', '--blocksize',  type=str,            required=False, default='256k',     help='Specify block size (format <number> or <number><unit>, <unit> can be "k","K","g","G","t","T", e.g. 1024M, 1048576, 1T, 10G, ...)')
+   parser.add_argument('-b', '--blockdelay', type=str,            required=False, default='-1',       help='Specify the delay (in microseconds, or as a string 1s, 100ms, 50us) between two subsequent writes of a block; helps to reduce the writing speed')
+   parser.add_argument('-f', '--filesize',   type=str,            required=False, default='1G',       help='Specify file size (format is the same as for blocksize)')
+   parser.add_argument('-s', '--osync',      action="store_true", required=False, default=False,      help='Open file with O_SYNC flag')
+   parser.add_argument('-d', '--odirect',    action="store_true", required=False, default=False,      help='Open file with O_DIRECT flag')
+   parser.add_argument('-i', '--iterations', type=int,            required=False, default=1,          help='Number of times the test must be repeated')
+   parser.add_argument('-t', '--numthreads', type=int,            required=False, default=1,          help='Number of threads that must write different files, or write in the same file (-S)')
+   parser.add_argument('-S', '--samefile',   action="store_true", required=False, default=False,      help='When a number > 1 of thread is specified, all threads will write on the same file')
+   parser.add_argument('-r', '--remove',     action="store_true", required=False, default=False,      help='Remove each testfile after each iteration has completed')
+   parser.add_argument('-R', '--random',     action="store_true", required=False, default=False,      help='Randomly write each block (default is sequential)')
+   parser.add_argument('-T', '--csv',        action="store_true", required=False, default=False,      help='Final output is in CSV colon-separated format')
+
+   options = parser.parse_args()
+   if options.filename == "":
+      print "Must specify at least the filename and it must not be an empty string"
+      sys.exit(1)
+
+   m = re.match(r'([0-9]+)([kKmMgGtT]?)', options.blocksize)
+   if not m:
+      print "blocksize must have the format [::digit::]X, where the optional 'X' is in the range (k,K,m,M,g,G,t,T) and represents a multiplier"
+      sys.exit(1)
+   bs_base = m.group(1)
+   bsize = int(bs_base)
+   bs_mult = m.group(2)
+   if bs_mult:
+      if bs_mult == 'k' or bs_mult == 'K':
+         bsize = int(bs_base) * 1024
+      if bs_mult == 'g' or bs_mult == 'G':
+         bsize = int(bs_base) * 1024 * 1024 * 1024
+      if bs_mult == 'm' or bs_mult == 'M':
+         bsize = int(bs_base) * 1024 * 1024
+      if bs_mult == 't' or bs_mult == 'T':
+         bsize = int(bs_base) * 1024 * 1024 * 1024 * 1024
+         
+   m = re.match(r'([0-9]+)([kKmMgGtT]?)', options.filesize)
+   if not m:
+      print "filesize must have the format [::digit::]X, where the optional 'X' is in the range (k,K,m,M,g,G,t,T) and represents the multiplier"
+      sys.exit(1)
+   fs_base = m.group(1)
+   fsize = int(fs_base)
+   fs_mult = m.group(2)
+   if fs_mult:
+      if fs_mult == 'k' or fs_mult == 'K':
+         fsize = int(fs_base) * 1024
+      if fs_mult == 'g' or fs_mult == 'G':
+         fsize = int(fs_base) * 1024 * 1024 * 1024
+      if fs_mult == 'm' or fs_mult == 'M':
+         fsize = int(fs_base) * 1024 * 1024
+      if fs_mult == 't' or fs_mult == 'T':
+         fsize = int(fs_base) * 1024 * 1024 * 1024 * 1024
+
+   if fsize < bsize:
+      print "Filesize cannot be smaller than blocksize."
+      sys.exit(1)
+
+   if (float(fsize)/float(bsize)).is_integer() == False:
+      print "The ratio filesize/blocksize must be integer."
+      sys.exit(1)
+
+   flags = os.O_RDWR|os.O_CREAT
+   if options.osync:
+      flags |= os.O_SYNC
+   if options.odirect:
+      try:
+         if os.O_DIRECT:
+            flags |= os.O_DIRECT
+      except:
+         flags = flags
+
+   offsets = []
+   for i in range(fsize/bsize):
+      offsets.append( i * bsize )
+
+   if options.random:
+      random.shuffle(offsets)
+      
+   iterations = 1
+   if options.iterations:
+      iterations = options.iterations
+
+   bdelay = -1.0
+   if options.blockdelay:
+      m = re.match(r'^(-?[0-9]+)([smu])?$', options.blockdelay)
+      if not m:
+         print "Format for block delay us <num><unit>, where unit can be 's' (for seconds) or 'm' (for milliseconds) or 'u' (for microseconds)"
+         sys.exit(1)
+      num = int(m.group(1))
+      unit = ""
+      if m.group(2):
+         unit = m.group(2)
+      if unit == "" or unit == "s":
+         bdelay = float(num)
+      if unit == "u":
+         bdelay = float(num) / 1000000.0
+      if unit == "m":
+         bdelay = float(num) / 1000.0
+
+   print "Filling buffer with random characters..."
+   m = mmap.mmap( -1, bsize ) # this is required to allign buffer in memory to 4KB (then to 512 bytes too! which is required by O_DIRECT)
+   buffer = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(bsize))
+   m.write( buffer )
+      
+   delay = 0
+   print "Start writing: filesize=%d (%s) blocksize=%d (%s) iterations=%d" % (fsize, formatSize(fsize),bsize, formatSize(bsize), iterations)
+   for i in range(iterations):
+      print "--> Iteration %d" % (i+1)
+      final_filename = "%s-%d" % (options.filename, i)
+
+      numfiles = options.numthreads
+      fhs = []
+      writers = []
+      threads = []
+      files = []
+      for i in range(numfiles):
+         final_filename_t = final_filename + "-th-%d" % i
+         files.append(final_filename_t)
+         
+         print "  Opening file %s" % (final_filename_t)
+         fh = os.open(final_filename_t, flags)
+         fhs.append(fh)
+      
+         writer = Writer( offsets, m, final_filename_t, fh )
+         writers.append(writer)
+         t = threading.Thread(name='writer', target=writer.doWrite, args=(bdelay,))
+         threads.append(t)
+         t.start()
+
+      for t in threads:
+         t.join()
+         
+      for fh in fhs:
+         os.close(fh)
+         
+      for writer in writers:
+         delay += writer.delay
+
+      if options.remove:
+         for file in files:
+            os.remove(file)
+      
+   rate = 1000000*(float(fsize*len(files))/delay) * iterations
+   if not options.csv:
+      print "\n--- SUMMARY ---"
+      print "  Elapsed time: %.2f ms - Total bytes written: %s - Rate: %s" % (delay/1000, formatSize(fsize * iterations * len(files)), formatRate(rate))
+   else:
+      print "SUMMARY:%.2f:%d:%.2f" % (delay/1000, fsize * iterations, rate)
