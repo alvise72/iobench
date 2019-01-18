@@ -46,7 +46,6 @@ class Writer:
    def __init__(self, offset_array, buffer, filename, filehandle ):
       self.offsets  = offset_array
       self.buffer   = buffer
-      #self.flush    = flush
       self.filename = filename
       self.fh       = filehandle
       self.delay    = float(0)
@@ -92,7 +91,7 @@ if __name__ == "__main__":
    bsize = 256 * 1024
    fsize = 1024 * 1024 * 1024
    
-   parser = argparse.ArgumentParser(description="I/O benchmark for disk writes")
+   parser = argparse.ArgumentParser(description="I/O benchmark")
    parser.add_argument('-F', '--filename',   type=str,            required=False, default='testfile', help='Specify filename for test')
    parser.add_argument('-B', '--blocksize',  type=str,            required=False, default='256k',     help='Specify block size (format <number> or <number><unit>, <unit> can be "k","K","g","G","t","T", e.g. 1024M, 1048576, 1T, 10G, ...)')
    parser.add_argument('-b', '--blockdelay', type=str,            required=False, default='-1',       help='Specify the delay (in microseconds, or as a string 1s, 100ms, 50us) between two subsequent block writes; helps to reduce the writing speed')
@@ -167,9 +166,24 @@ if __name__ == "__main__":
    for i in range(fsize/bsize):
       offsets.append( i * bsize )
 
-   if options.random:
+   if options.random and not options.samefile:
       random.shuffle(offsets)
-      
+
+   offsets_slices = []
+   if options.samefile and options.numthreads and options.numthreads>1:
+      slicesize = (float(len(offsets)))/float(options.numthreads)
+      #print "slicesize=%d" % (slicesize)
+      if slicesize - int(slicesize) > 0:
+         print 'Filesize / blocksize is %d which is not multiple integer of the number of threads %d. Stop!' % (len(offsets), options.numthreads)
+         sys.exit(1)
+      for i in range(options.numthreads):
+         #print i
+         offsets_slices.append(offsets[int(i*slicesize):int(i*slicesize+slicesize)])
+
+   #print offsets
+   #print offsets_slices
+   #sys.exit(0)
+         
    iterations = 1
    if options.iterations:
       iterations = options.iterations
