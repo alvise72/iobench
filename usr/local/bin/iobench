@@ -11,9 +11,26 @@ import argparse
 import threading
 
 from time import sleep
+from multiprocessing import Pool, Lock
 
 # echo 3 > /proc/sys/vm/drop_caches
 
+lock = Lock()
+
+##############################################################################################################################################
+
+def msg(message):
+   msg = '%s%s' % (message, os.linesep)
+   with lock:
+      sys.stdout.write(msg)
+
+##############################################################################################################################################
+
+class File:
+   def __init__(self, filename, filehandle):
+      self.filename = filename
+      self.filehandle = filehandle
+      
 ##############################################################################################################################################
 
 def formatRate( rate ):
@@ -27,6 +44,8 @@ def formatRate( rate ):
    if rate>=1024*1024*1024*1024:
       srate = "%.2f TB/s" % (float(rate) / float(1024*1024*1024*1024))
    return srate
+
+##############################################################################################################################################
 
 def formatSize( size ):
    ssize = "%d Bytes" % (size)
@@ -43,45 +62,62 @@ def formatSize( size ):
 ###############################################################################################################################################
 
 class Writer:
-   def __init__(self, offset_array, buffer, filename, filehandle ):
+   def __init__(self, offset_array, buffer, file, writerid, pedantic ):
+      self.writerid = writerid
+      self.file     = file
       self.offsets  = offset_array
       self.buffer   = buffer
-      self.filename = filename
-      self.fh       = filehandle
       self.delay    = float(0)
+      self.pedantic = pedantic
+      #print "Writer #%d: " % (self.writerid),
+      #print self.offsets
       
    def doWrite( self, block_delay=-1.0 ):
-      print "  Start writing into file %s" % (self.filename)
+      #print "Writer #%d - Start writing into file %s" % (self.writerid, self.file.filename)
+      if self.pedantic:
+         msg("Writer #%d - Start writing into file %s" % (self.writerid, self.file.filename))
       before = 1000000*time.time()
       for offset in self.offsets:
-         os.lseek(self.fh, offset, os.SEEK_SET)
-         os.write(self.fh, self.buffer)
+         #print "Writer #%d - Seeking to %d" % (self.writerid, offset)
+         if self.pedantic:
+            msg( "Writer #%d - Seeking to %d and writing %d bytes" % (self.writerid, offset, len(self.buffer)) )
+         os.lseek(self.file.filehandle, offset, os.SEEK_SET)
+         os.write(self.file.filehandle, self.buffer)
          if block_delay >- 1:
             time.sleep( block_delay )
 
       after = 1000000*time.time()
-      print "  Stopped writing into %s" % (self.filename)
+      #print "Writer #%d - Stopped writing into %s" % (self.writerid, self.file.filename)
+      if self.pedantic:
+         msg("Writer #%d - Stopped writing into %s" % (self.writerid, self.file.filename))
       self.delay = float(after)-float(before)
 
 ###############################################################################################################################################
 
 class Reader:
-   def __init__(self, offset_array, bsize, destbuf, filename, filehandle):
+   def __init__(self, offset_array, bsize, destbuf, file, readir, pedantic):
+      self.readerit = readerid
+      self.file     = file
       self.offsets  = offset_array
       self.buffer   = destbuf
-      self.filename = filename
-      self.fh       = filehandle
+      #self.filename = filename
+      #self.fh       = filehandle
       self.delay    = float(0)
       self.bsize    = bsize
+      self.pedantic = pedantic
       
    def doRead(self):
-      print "  Start reading from file %s" % (self.filename)
+      #print "Reader #%d - Start reading from file %s" % (self.readerid, self.file.filename)
+      if self.pedantic:
+         msg( "Reader #%d - Start reading from file %s" % (self.readerid, self.file.filename) )
       before = 1000000*time.time()
       for offset in self.offsets:
-         os.lseek(self.fh, offset, os.SEEK_SET)
-         os.read(self.fh, self.buffer)
+         os.lseek(self.file.filehandle, offset, os.SEEK_SET)
+         os.read(self.file.filehandle, self.buffer)
       after = 1000000*time.time()
-      print "  Stopped reading from %s" % (self.filename)
+      #print "Reader #%d - Stopped reading from %s" % (self.readerit, self.file.filename)
+      if self.pedantic:
+         msg( "Reader #%d - Stopped reading from %s" % (self.readerit, self.file.filename) )
       self.delay = float(after)-float(before)
 
 ###############################################################################################################################################
@@ -104,6 +140,8 @@ if __name__ == "__main__":
    parser.add_argument('-r', '--remove',     action="store_true", required=False, default=False,      help='Remove each testfile after each iteration has completed')
    parser.add_argument('-R', '--random',     action="store_true", required=False, default=False,      help='Randomly write each block (default is sequential)')
    parser.add_argument('-T', '--csv',        action="store_true", required=False, default=False,      help='Final output is in CSV colon-separated format')
+   parser.add_argument('-P', '--pedantic',   action="store_true", required=False, default=False,      help='Print much information about that threads do')
+   
 
    options = parser.parse_args()
    if options.filename == "":
@@ -166,23 +204,21 @@ if __name__ == "__main__":
    for i in range(fsize/bsize):
       offsets.append( i * bsize )
 
-   if options.random and not options.samefile:
+   if options.random:
       random.shuffle(offsets)
-
+      
    offsets_slices = []
+   for i in range(options.numthreads):
+      offsets_slices.append( offsets )
+      
    if options.samefile and options.numthreads and options.numthreads>1:
+      offsets_slices = []
       slicesize = (float(len(offsets)))/float(options.numthreads)
-      #print "slicesize=%d" % (slicesize)
       if slicesize - int(slicesize) > 0:
          print 'Filesize / blocksize is %d which is not multiple integer of the number of threads %d. Stop!' % (len(offsets), options.numthreads)
          sys.exit(1)
       for i in range(options.numthreads):
-         #print i
          offsets_slices.append(offsets[int(i*slicesize):int(i*slicesize+slicesize)])
-
-   #print offsets
-   #print offsets_slices
-   #sys.exit(0)
          
    iterations = 1
    if options.iterations:
@@ -217,36 +253,43 @@ if __name__ == "__main__":
       final_filename = "%s-%d" % (options.filename, i)
 
       numfiles = options.numthreads
-      fhs = []
+      if options.samefile:
+         numfiles = 1
+         
+      files = []
       writers = []
       threads = []
-      files = []
+      
       for i in range(numfiles):
          final_filename_t = final_filename + "-th-%d" % i
-         files.append(final_filename_t)
-         
          print "  Opening file %s" % (final_filename_t)
          fh = os.open(final_filename_t, flags)
-         fhs.append(fh)
-      
-         writer = Writer( offsets, m, final_filename_t, fh )
+         file = File( final_filename_t, fh )
+         files.append(file)
+
+      filecounter = 0
+      for t in range(options.numthreads):
+         writer = Writer( offsets_slices[t], m, files[filecounter], t, options.pedantic )
          writers.append(writer)
          t = threading.Thread(name='writer', target=writer.doWrite, args=(bdelay,))
          threads.append(t)
          t.start()
-
+         if not options.samefile:
+            filecounter = filecounter + 1
+      
       for t in threads:
          t.join()
          
-      for fh in fhs:
-         os.close(fh)
+      for file in files:
+         print "  Closing file %s" % (file.filename)
+         os.close(file.filehandle)
          
       for writer in writers:
          delay += writer.delay
 
       if options.remove:
          for file in files:
-            os.remove(file)
+            os.remove(file.filename)
       
    rate = 1000000*(float(numfiles*fsize*len(files))/delay) * iterations
    if not options.csv:
