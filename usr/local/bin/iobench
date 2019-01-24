@@ -290,8 +290,12 @@ if __name__ == "__main__":
       if options.remove:
          for file in files:
             os.remove(file.filename)
-      
-   rate = 1000000*(float(numfiles*fsize*len(files))/delay) * iterations
+   
+   multiplier = numfiles;
+   if numfiles == 1 and options.numthreads>1:
+      mutiplier = options.numthreads
+   
+   rate = 1000000*(float(mutiplier*fsize*len(files))/delay) * iterations
    if not options.csv:
       print "\n--- SUMMARY ---"
       print "  Elapsed time: %.2f ms - Total bytes written: %s - Rate: %s" % (delay/1000, formatSize(fsize * iterations * len(files)), formatRate(rate))
