@@ -59,6 +59,20 @@ def formatSize( size ):
       ssize = "%d TBytes" % (float(size) / float(1024*1024*1024*1024))
    return ssize
 
+##############################################################################################################################################
+
+def formatNum( size ):
+   ssize = "%d Bytes" % (size)
+   if size>=1024:
+      ssize = "%d K" % (float(size) / float(1024))
+   if size>=1024*1024:
+      ssize = "%d M" % (float(size) / float(1024*1024))
+   if size>=1024*1024*1024:
+      ssize = "%d G" % (float(size) / float(1024*1024*1024))
+   if size>=1024*1024*1024*1024:
+      ssize = "%d T" % (float(size) / float(1024*1024*1024*1024))
+   return ssize
+
 ###############################################################################################################################################
 
 class Writer:
@@ -247,7 +261,7 @@ if __name__ == "__main__":
    m.write( buffer )
       
    delay = 0
-   print "Start writing: filesize=%d (%s) blocksize=%d (%s) iterations=%d" % (fsize, formatSize(fsize),bsize, formatSize(bsize), iterations)
+   print "Start writing: filesize=%d (%s) blocksize=%d (%s) num-blocks-to-write=%d (%s) iterations=%d" % (fsize, formatSize(fsize),bsize, formatSize(bsize), fsize/bsize, formatNum(fsize/bsize), iterations)
    for i in range(iterations):
       print "--> Iteration %d" % (i+1)
       final_filename = "%s-%d" % (options.filename, i)
