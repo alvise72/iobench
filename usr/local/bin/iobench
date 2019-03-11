@@ -155,8 +155,8 @@ if __name__ == "__main__":
    parser.add_argument('-R', '--random',     action="store_true", required=False, default=False,      help='Randomly write each block (default is sequential)')
    parser.add_argument('-T', '--csv',        action="store_true", required=False, default=False,      help='Final output is in CSV colon-separated format')
    parser.add_argument('-P', '--pedantic',   action="store_true", required=False, default=False,      help='Print much information about that threads do')
+   parser.add_argument('-a', '--preallocate',action="store_true", required=False, default=False,      help='Inkove the posix_fallocate syscall')
    
-
    options = parser.parse_args()
    if options.filename == "":
       print "Must specify at least the filename and it must not be an empty string"
@@ -278,6 +278,8 @@ if __name__ == "__main__":
          final_filename_t = final_filename + "-th-%d" % i
          print "  Opening file %s" % (final_filename_t)
          fh = os.open(final_filename_t, flags)
+         if options.preallocate:
+            os.posix_fallocate( fh, 0, fsize )
          file = File( final_filename_t, fh )
          files.append(file)
 
