@@ -76,15 +76,14 @@ def formatNum( size ):
 ###############################################################################################################################################
 
 class Writer:
-   def __init__(self, offset_array, buffer, file, writerid, pedantic ):
+   def __init__(self, offset_array, buffer, file, writerid, pedantic, sync ):
       self.writerid = writerid
       self.file     = file
       self.offsets  = offset_array
       self.buffer   = buffer
       self.delay    = float(0)
       self.pedantic = pedantic
-      #print "Writer #%d: " % (self.writerid),
-      #print self.offsets
+      self.sync     = sync
       
    def doWrite( self, block_delay=-1.0 ):
       #print "Writer #%d - Start writing into file %s" % (self.writerid, self.file.filename)
@@ -99,7 +98,8 @@ class Writer:
          os.write(self.file.filehandle, self.buffer)
          if block_delay >- 1:
             time.sleep( block_delay )
-
+      if self.sync:
+         os.fsync( self.file.filehandle )
       after = 1000000*time.time()
       #print "Writer #%d - Stopped writing into %s" % (self.writerid, self.file.filename)
       if self.pedantic:
