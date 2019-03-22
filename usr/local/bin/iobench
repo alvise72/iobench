@@ -143,7 +143,7 @@ if __name__ == "__main__":
    
    parser = argparse.ArgumentParser(description="I/O benchmark")
    #parser.add_argument('-F', '--filename',   type=str,            required=False, default='testfile', help='Specify filename for test')
-   parser.add_argument('testfile', metavar='TESTFILE', type=str, nargs=1, help='Specify the mandatory filename for test')
+   parser.add_argument('filename', metavar='TESTFILE', type=str, nargs=1, help='Specify the mandatory filename for test')
    parser.add_argument('-B', '--blocksize',  type=str,            required=False, default='256k',     help='Specify block size (format <number> or <number><unit>, <unit> can be "k","K","g","G","t","T", e.g. 1024M, 1048576, 1T, 10G, ...)')
    parser.add_argument('-b', '--blockdelay', type=str,            required=False, default='-1',       help='Specify the delay (in microseconds, or as a string 1s, 100ms, 50us) between two subsequent block writes; helps to reduce the writing speed')
    parser.add_argument('-f', '--filesize',   type=str,            required=False, default='1G',       help='Specify file size (format is the same as for blocksize)')
