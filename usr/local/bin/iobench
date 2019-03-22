@@ -148,6 +148,7 @@ if __name__ == "__main__":
    parser.add_argument('-b', '--blockdelay', type=str,            required=False, default='-1',       help='Specify the delay (in microseconds, or as a string 1s, 100ms, 50us) between two subsequent block writes; helps to reduce the writing speed')
    parser.add_argument('-f', '--filesize',   type=str,            required=False, default='1G',       help='Specify file size (format is the same as for blocksize)')
    parser.add_argument('-s', '--osync',      action="store_true", required=False, default=False,      help='Open file with O_SYNC flag')
+   parser.add_argument('-n', '--sync',       action="store_true", required=False, default=False,      help='Call the fsync at the end of entire write process')
    parser.add_argument('-d', '--odirect',    action="store_true", required=False, default=False,      help='Open file with O_DIRECT flag')
    parser.add_argument('-i', '--iterations', type=int,            required=False, default=1,          help='Number of times the test must be repeated')
    parser.add_argument('-t', '--numthreads', type=int,            required=False, default=1,          help='Number of threads that must write different files, or write in the same file (-S)')
