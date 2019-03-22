@@ -142,7 +142,8 @@ if __name__ == "__main__":
    fsize = 1024 * 1024 * 1024
    
    parser = argparse.ArgumentParser(description="I/O benchmark")
-   parser.add_argument('-F', '--filename',   type=str,            required=False, default='testfile', help='Specify filename for test')
+   #parser.add_argument('-F', '--filename',   type=str,            required=False, default='testfile', help='Specify filename for test')
+   parser.add_argument('testfile', metavar='TESTFILE', type=str, nargs=1, help='Specify the mandatory filename for test')
    parser.add_argument('-B', '--blocksize',  type=str,            required=False, default='256k',     help='Specify block size (format <number> or <number><unit>, <unit> can be "k","K","g","G","t","T", e.g. 1024M, 1048576, 1T, 10G, ...)')
    parser.add_argument('-b', '--blockdelay', type=str,            required=False, default='-1',       help='Specify the delay (in microseconds, or as a string 1s, 100ms, 50us) between two subsequent block writes; helps to reduce the writing speed')
    parser.add_argument('-f', '--filesize',   type=str,            required=False, default='1G',       help='Specify file size (format is the same as for blocksize)')
@@ -158,8 +159,9 @@ if __name__ == "__main__":
    parser.add_argument('-a', '--preallocate',action="store_true", required=False, default=False,      help='Inkove the posix_fallocate syscall')
    
    options = parser.parse_args()
-   if options.filename == "":
-      print "Must specify at least the filename and it must not be an empty string"
+   #filename = options.testfile[0]
+   if len(options.filename) == 0 or options.filename[0] == "":
+      print "filename is mandatory and it must not be an empty string"
       sys.exit(1)
 
    m = re.match(r'([0-9]+)([kKmMgGtT]?)', options.blocksize)
@@ -264,7 +266,7 @@ if __name__ == "__main__":
    print "Start writing: filesize=%d (%s) blocksize=%d (%s) num-blocks-to-write=%d (%s) iterations=%d" % (fsize, formatSize(fsize),bsize, formatSize(bsize), fsize/bsize, formatNum(fsize/bsize), iterations)
    for i in range(iterations):
       print "--> Iteration %d" % (i+1)
-      final_filename = "%s-%d" % (options.filename, i)
+      final_filename = "%s-%d" % (options.filename[0], i)
 
       numfiles = options.numthreads
       if options.samefile:
