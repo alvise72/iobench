@@ -142,7 +142,6 @@ if __name__ == "__main__":
    fsize = 1024 * 1024 * 1024
    
    parser = argparse.ArgumentParser(description="I/O benchmark")
-   #parser.add_argument('-F', '--filename',   type=str,            required=False, default='testfile', help='Specify filename for test')
    parser.add_argument('filename', metavar='TESTFILE', type=str, nargs=1, help='Specify the mandatory filename for test')
    parser.add_argument('-B', '--blocksize',  type=str,            required=False, default='256k',     help='Specify block size (format <number> or <number><unit>, <unit> can be "k","K","g","G","t","T", e.g. 1024M, 1048576, 1T, 10G, ...)')
    parser.add_argument('-b', '--blockdelay', type=str,            required=False, default='-1',       help='Specify the delay (in microseconds, or as a string 1s, 100ms, 50us) between two subsequent block writes; helps to reduce the writing speed')
@@ -160,12 +159,12 @@ if __name__ == "__main__":
    parser.add_argument('-a', '--preallocate',action="store_true", required=False, default=False,      help='Inkove the posix_fallocate syscall')
    
    options = parser.parse_args()
-   #filename = options.testfile[0]
+   
    if len(options.filename) == 0 or options.filename[0] == "":
       print "filename is mandatory and it must not be an empty string"
       sys.exit(1)
 
-   m = re.match(r'([0-9]+)([kKmMgGtT]?)', options.blocksize)
+   m = re.match(r'([0-9]+)([kKmMgGtT]{1})', options.blocksize)
    if not m:
       print "blocksize must have the format [::digit::]X, where the optional 'X' is in the range (k,K,m,M,g,G,t,T) and represents a multiplier"
       sys.exit(1)
@@ -182,7 +181,7 @@ if __name__ == "__main__":
       if bs_mult == 't' or bs_mult == 'T':
          bsize = int(bs_base) * 1024 * 1024 * 1024 * 1024
          
-   m = re.match(r'([0-9]+)([kKmMgGtT]?)', options.filesize)
+   m = re.match(r'([0-9]+)([kKmMgGtT]{1})', options.filesize)
    if not m:
       print "filesize must have the format [::digit::]X, where the optional 'X' is in the range (k,K,m,M,g,G,t,T) and represents the multiplier"
       sys.exit(1)
