@@ -166,7 +166,7 @@ if __name__ == "__main__":
 
    m = re.match(r'([0-9]+)([kKmMgGtT]{1})', options.blocksize)
    if not m:
-      print "blocksize must have the format [::digit::]X, where the optional 'X' is in the range (k,K,m,M,g,G,t,T) and represents a multiplier"
+      print "blocksize must have the format [::digit::]X, where the optional 'X' can be one of the following: k,K,m,M,g,G,t,T"
       sys.exit(1)
    bs_base = m.group(1)
    bsize = int(bs_base)
@@ -183,7 +183,7 @@ if __name__ == "__main__":
          
    m = re.match(r'([0-9]+)([kKmMgGtT]{1})', options.filesize)
    if not m:
-      print "filesize must have the format [::digit::]X, where the optional 'X' is in the range (k,K,m,M,g,G,t,T) and represents the multiplier"
+      print "filesize must have the format [::digit::]X, where the optional 'X' can be one of the following: k,K,m,M,g,G,t,T"
       sys.exit(1)
    fs_base = m.group(1)
    fsize = int(fs_base)
